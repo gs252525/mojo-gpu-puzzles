@@ -15,7 +15,7 @@ from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext, HostBuffer, DeviceBuffer
 from layout import TileTensor, Coord, TensorLayout
 from layout.tensor_engine import TensorEngine
-from layout.tile_layout import row_major
+from layout.layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.math import exp
 from std.bit import log2_ceil
@@ -45,6 +45,38 @@ def softmax_gpu_kernel[
         dtype.is_floating_point()
     ), "dtype must be a floating-point type"
     # FILL IN (roughly 33 lines)
+    var i = thread_idx.x
+    var x= rebind[Scalar[dtype]](input[i])
+    var tmp = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE]()
+    ) 
+    var sum_s = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE]()
+    ) 
+    var st = SIZE >> 1 
+
+    # 동기화 
+    tmp[i] = x
+    barrier() 
+    # max 구하기 
+
+    while st > 0: 
+        if i < st: 
+            tmp[i] = max(tmp[i], tmp[i+st]) 
+        st >>= 1
+        barrier() 
+    
+    var mx = tmp[0] 
+    tmp[i] = rebind[Scalar[dtype]](exp(x - mx))
+    x = tmp[i]
+    barrier() 
+    st = SIZE >> 1 
+    while st > 0: 
+        if i < st: 
+            tmp[i] = tmp[i] + tmp[i+st] 
+        st >>= 1 
+        barrier() 
+    output[i] = x / tmp[0]
 
 
 # ANCHOR_END: softmax_gpu_kernel
@@ -67,7 +99,16 @@ def softmax_cpu_kernel[
         dtype.is_floating_point()
     ), "dtype must be a floating-point type"
     # FILL IN (roughly 12 lines)
-
+    var mx = input[0] 
+    for i in range(SIZE): 
+        mx = max(mx, input[i]) 
+    for i in range(SIZE): 
+        output[i] = exp(input[i]-mx) 
+    var sum:Scalar[dtype] = 0.0 
+    for i in range(SIZE): 
+        sum += rebind[Scalar[dtype]](output[i]) 
+    for i in range(SIZE):
+        output[i] /= sum 
 
 # ANCHOR_END: softmax_cpu_kernel
 

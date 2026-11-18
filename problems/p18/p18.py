@@ -43,7 +43,26 @@ def softmax(
         custom_extensions=[mojo_kernels],
     ) as graph:
         # FILL IN (roughly 4 unformatted lines)
-        pass
+        input_value, = graph.inputs
+        # The output shape is the same as the input for our 1D convolution implementation
+        # Note: the name must match the name used in `@extensibility.register("conv1d")` in op/conv1d.mojo
+        output = ops.custom(
+            name="softmax",
+            device=DeviceRef.from_device(device),
+            values=[input_value],
+            out_types=[
+                TensorType(
+                    dtype=input_value.tensor.dtype,
+                    shape=input_value.tensor.shape,
+                    device=DeviceRef.from_device(device),
+                )
+            ],
+            parameters={
+                "input_size": input_tensor.shape[0],
+                "dtype": dtype,
+            },
+        )[0].tensor
+        graph.output(output)
 
     # ANCHOR_END: softmax_custom_op_graph
 
