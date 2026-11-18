@@ -13,7 +13,7 @@
 from max.gpu import thread_idx
 from max.gpu.host import DeviceContext
 from layout import TileTensor
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from std.testing import assert_equal
 
 from harness.canary import PuzzleMemory
@@ -35,8 +35,8 @@ def add_10_2d(
     var size = Int(size_dev)
     var row = thread_idx.y
     var col = thread_idx.x
-    # FILL ME IN (roughly 2 lines)
-
+    if row<size and col<size: 
+      output[row,col] = a[row,col] + 10.0 
 
 # ANCHOR_END: add_10_2d_tile_tensor
 

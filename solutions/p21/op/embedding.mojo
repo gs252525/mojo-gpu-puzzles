@@ -14,9 +14,9 @@ from std.math import ceildiv
 from max.gpu import thread_idx, block_idx, block_dim, grid_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
-from layout import TileTensor, Coord
+from layout import TileTensor, Coord, TensorLayout
 from layout.tensor_engine import TensorEngine
-from layout.layout import row_major, TensorLayout
+from layout.tile_layout import row_major
 from std.sys import argv
 from std.testing import assert_equal
 

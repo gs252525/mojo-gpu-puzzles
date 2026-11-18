@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.testing import assert_equal
 
@@ -47,8 +47,14 @@ def pooling[
 
     var global_i = block_dim.x * block_idx.x + thread_idx.x
     var local_i = thread_idx.x
-    # FILL ME IN (roughly 10 lines)
+    # FILL ME IN (roughly 10 lines)   
+    shared[local_i] = rebind[Scalar[dtype]](a[global_i]) 
+    barrier() 
 
+    var s = Scalar[dtype](0.0) 
+    for j in range(max(local_i - 2, 0), local_i + 1):
+        s += shared[j]
+    output[global_i] = s 
 
 # ANCHOR_END: pooling
 

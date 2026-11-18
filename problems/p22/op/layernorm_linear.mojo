@@ -14,9 +14,9 @@ from std.math import ceildiv, sqrt
 from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from std.atomic import Atomic
-from layout import TileTensor, Coord
+from layout import TileTensor, Coord, TensorLayout
 from layout.tensor_engine import TensorEngine
-from layout.layout import row_major, TensorLayout
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 import extensibility
 

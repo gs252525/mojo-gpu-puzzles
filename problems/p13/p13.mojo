@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.sys import argv
 from std.testing import assert_equal
@@ -45,7 +45,20 @@ def conv_1d_simple[
 ) where (Engine.element_size == 1):
     var global_i = block_dim.x * block_idx.x + thread_idx.x
     var local_i = thread_idx.x
-    # FILL ME IN (roughly 14 lines)
+    if local_i >= SIZE: 
+        return 
+    # FILL ME IN (roughly 18 lines)
+
+    var shared = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE]()
+    )
+    shared[local_i] = 0.0 
+    for j in range(CONV): 
+        if local_i + j < SIZE:
+            print(local_i,j)
+            shared[local_i] += rebind[Scalar[dtype]](a[local_i + j] * b[j])
+
+    output[global_i] = shared[local_i] 
 
 
 # ANCHOR_END: conv_1d_simple
@@ -75,6 +88,33 @@ def conv_1d_block_boundary[
     var global_i = block_dim.x * block_idx.x + thread_idx.x
     var local_i = thread_idx.x
     # FILL ME IN (roughly 18 lines)
+
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[TPB]()
+    ) 
+    
+    var shared_b = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[CONV_2]()
+    )
+
+    if global_i < SIZE_2: 
+        shared_a[local_i] = rebind[Scalar[dtype]](a[global_i]) 
+    
+    if local_i < CONV_2: 
+        shared_b[local_i] = rebind[Scalar[dtype]](b[local_i]) 
+
+    barrier() 
+
+    if global_i < SIZE_2: 
+        var local_sum: output.ElementType = 0  
+        comptime for j in range(CONV_2): 
+            if global_i + j < SIZE_2: 
+                if local_i + j < TPB: 
+                    local_sum += shared_a[local_i+j] * shared_b[j] 
+                else : 
+                    local_sum += a[global_i+j] * shared_b[j]
+        
+        output[global_i] = local_sum
 
 
 # ANCHOR_END: conv_1d_block_boundary

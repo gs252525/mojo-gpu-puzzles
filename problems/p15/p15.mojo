@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.testing import assert_equal
 
@@ -45,7 +45,25 @@ def axis_sum[
     var local_i = thread_idx.x
     var batch = block_idx.y
     # FILL ME IN (roughly 15 lines)
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE]()
+    ) 
+    var st = 1 
+    if local_i < SIZE: 
+        shared_a[local_i] = rebind[Scalar[dtype]](a[batch, local_i]) 
 
+    barrier() 
+
+    while st < size:
+        var temp: Scalar[dtype] = 0 
+        if local_i + st < size: 
+            temp = shared_a[local_i+st]
+        st *= 2 
+        barrier()
+        shared_a[local_i] += temp 
+        barrier() 
+    if local_i == 0: 
+        output[batch,0] = shared_a[0] 
 
 # ANCHOR_END: axis_sum
 

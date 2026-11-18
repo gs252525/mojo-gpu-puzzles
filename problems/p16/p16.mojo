@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.sys import argv
 from std.testing import assert_equal
@@ -43,8 +43,28 @@ def naive_matmul[
 ) where (Engine.element_size == 1):
     var row = block_dim.y * block_idx.y + thread_idx.y
     var col = block_dim.x * block_idx.x + thread_idx.x
+    if row >= SIZE or col >= SIZE: 
+        return 
     # FILL ME IN (roughly 6 lines)
-
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE, SIZE]()
+    ) 
+    var shared_b = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE, SIZE]()
+    ) 
+    
+    if row < SIZE and col < SIZE: 
+        print(row,col,a[row,col])
+        shared_a[row,col] = rebind[Scalar[dtype]](a[row,col]) 
+        shared_b[row,col] = rebind[Scalar[dtype]](b[row,col]) 
+    
+    barrier() 
+    # output[r][c] = sigma a[r][i] b[i][c] 
+    var local_sum: Scalar[dtype] = 0
+    comptime for i in range(2): 
+        local_sum += shared_a[row,i] * shared_b[i,col] 
+    output[row,col] = local_sum
+    print(row,col,local_sum)
 
 # ANCHOR_END: naive_matmul
 
@@ -62,9 +82,27 @@ def single_block_matmul[
 ) where (Engine.element_size == 1):
     var row = block_dim.y * block_idx.y + thread_idx.y
     var col = block_dim.x * block_idx.x + thread_idx.x
-    var local_row = thread_idx.y
-    var local_col = thread_idx.x
-    # FILL ME IN (roughly 12 lines)
+    if row >= SIZE or col >= SIZE: 
+        return 
+    # FILL ME IN (roughly 6 lines)
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE, SIZE]()
+    ) 
+    var shared_b = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[SIZE, SIZE]()
+    ) 
+    
+    if row < SIZE and col < SIZE: 
+        print(row,col,a[row,col])
+        shared_a[row,col] = rebind[Scalar[dtype]](a[row,col]) 
+        shared_b[row,col] = rebind[Scalar[dtype]](b[row,col]) 
+    
+    barrier() 
+    # output[r][c] = sigma a[r][i] b[i][c] 
+    var local_sum: Scalar[dtype] = 0
+    comptime for i in range(2): 
+        local_sum += shared_a[row,i] * shared_b[i,col] 
+    output[row,col] = local_sum
 
 
 # ANCHOR_END: single_block_matmul
@@ -76,6 +114,8 @@ comptime THREADS_PER_BLOCK_TILED = (TPB, TPB)
 comptime layout_tiled = row_major[SIZE_TILED, SIZE_TILED]()
 comptime LayoutTiledType = type_of(layout_tiled)
 
+
+# 한 스테르듣 (3,3) 짜리 들고 있다는거고 
 
 # ANCHOR: matmul_tiled
 def matmul_tiled[
@@ -96,8 +136,27 @@ def matmul_tiled[
     var local_col = thread_idx.x
     var tiled_row = block_idx.y * TPB + local_row
     var tiled_col = block_idx.x * TPB + local_col
+    if tiled_row >= SIZE_TILED or tiled_col >= SIZE_TILED: 
+        return 
     # FILL ME IN (roughly 20 lines)
-
+    # 
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[TPB, TPB]()
+    ) 
+    var shared_b = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[TPB, TPB]()
+    ) 
+    var local_sum: Scalar[dtype] = 0 
+    for k in range(3): 
+        # a[row][k] * b[k][col] 
+        shared_a[local_row,local_col] = rebind[Scalar[dtype]](a[tiled_row,local_col + k*3]) 
+        shared_b[local_row,local_col] = rebind[Scalar[dtype]](b[local_row+k*3,tiled_col])
+        barrier() 
+        for t in range(3): 
+            local_sum += shared_a[local_row,t] * shared_b[t,local_col] 
+        barrier()
+    
+    output[tiled_row,tiled_col] = local_sum
 
 # ANCHOR_END: matmul_tiled
 

@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.sys import argv
 from std.math import ceildiv, log2
@@ -44,7 +44,17 @@ def prefix_sum_simple[
     var size = Int(size_dev)
     var global_i = block_dim.x * block_idx.x + thread_idx.x
     var local_i = thread_idx.x
-    # FILL ME IN (roughly 18 lines)
+    # FILL ME IN (roughly 20 lines)
+
+    output[local_i] = a[local_i] 
+    barrier()
+    var st = 1 
+    while st < size: 
+        print(st,output[local_i],local_i)
+        if local_i & st: 
+            output[local_i] += output[local_i - (local_i&(st*2-1)) + st - 1] 
+        st *= 2 
+        barrier()
 
 
 # ANCHOR_END: prefix_sum_simple
@@ -76,6 +86,21 @@ def prefix_sum_local_phase[
     var local_i = thread_idx.x
     # FILL ME IN (roughly 20 lines)
 
+    var shared_a = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[TPB]()
+    ) 
+    shared_a[local_i] = rebind[Scalar[dtype]](a[global_i])
+    barrier()
+    var st = 1 
+    while st < TPB: 
+        if local_i & st: 
+            var src = (local_i | (st-1)) ^ st
+            shared_a[local_i] += shared_a[src] 
+        st *= 2 
+        barrier()
+    
+    if global_i < SIZE_2: 
+        output[global_i] = rebind[Scalar[dtype]](shared_a[local_i])
 
 # Kernel 2: Add block sums to their respective blocks
 def prefix_sum_block_sum_phase[
@@ -88,7 +113,9 @@ def prefix_sum_block_sum_phase[
 ) where (Engine.element_size == 1):
     var size = Int(size_dev)
     var global_i = block_dim.x * block_idx.x + thread_idx.x
-    # FILL ME IN (roughly 3 lines)
+    if global_i >= TPB:
+        output[global_i] += output[7]
+    
 
 
 # ANCHOR_END: prefix_sum_complete

@@ -14,7 +14,7 @@ from max.gpu import thread_idx, block_idx, block_dim
 from max.gpu.sync import barrier
 from max.gpu.host import DeviceContext
 from layout import TileTensor, TensorEngine
-from layout.layout import row_major
+from layout.tile_layout import row_major
 from layout.tile_tensor import stack_allocation
 from std.testing import assert_equal
 
@@ -42,9 +42,22 @@ def dot_product[
 ) where (Engine.element_size == 1):
     var size = Int(size_dev)
     # FILL ME IN (roughly 13 lines)
-    ...
+    var idx = thread_idx.x 
+    var shared = stack_allocation[dtype=dtype, address_space=.SHARED](
+        row_major[TPB]()
+    )
+    shared[idx] = rebind[Scalar[dtype]](a[idx] * b[idx])
+    barrier() 
 
+    var shit = TPB // 2 
+    while shit > 0:
+        if idx < shit: 
+            shared[idx] += shared[idx + shit] 
+        barrier() 
+        shit //= 2 
 
+    if idx == 0: 
+        output[0] = shared[0] 
 # ANCHOR_END: dot_product
 
 
